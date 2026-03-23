@@ -1,0 +1,98 @@
+instrument:
+  id: ptr
+  name: "Опросник посттравматического роста (Tedeschi & Calhoun, адаптация Магомед-Эминова)"
+  n_items: 21
+  min_score: 0
+  max_score: 5
+  aggregation: sum_subscales
+  instruction: >
+    Оцените для каждого утверждения степень, в которой соответствующее изменение
+    произошло в вашей жизни вследствие вашего кризиса.
+
+scale_labels:
+  - "Никаких перемен"
+  - "Очень малая степень"
+  - "Малая степень"
+  - "Умеренная степень"
+  - "Большая степень"
+  - "Очень большая степень"
+
+items:
+  - {n: 1,  text: "У меня поменялись жизненные приоритеты"}
+  - {n: 2,  text: "Я гораздо лучше понимаю ценность собственной жизни"}
+  - {n: 3,  text: "У меня появились новые интересы"}
+  - {n: 4,  text: "Я чувствую большую уверенность в себе"}
+  - {n: 5,  text: "Я стал лучше понимать духовные проблемы"}
+  - {n: 6,  text: "Я нахожу, что я больше рассчитываю на людей в трудную минуту"}
+  - {n: 7,  text: "Я направил свою жизнь по новому пути"}
+  - {n: 8,  text: "Я испытываю большую близость с окружающими"}
+  - {n: 9,  text: "Я более охотно выражаю свои эмоции"}
+  - {n: 10, text: "Я лучше понимаю, что могу справляться с трудностями"}
+  - {n: 11, text: "Я могу сделать свою жизнь лучше"}
+  - {n: 12, text: "Я в большей степени способен принимать вещи такими, какие они есть"}
+  - {n: 13, text: "Я могу больше ценить каждый день своей жизни"}
+  - {n: 14, text: "У меня появились возможности, которые не были мне доступны раньше"}
+  - {n: 15, text: "У меня появилось больше сострадания к людям"}
+  - {n: 16, text: "Я трачу больше усилий на налаживание взаимоотношений"}
+  - {n: 17, text: "Я с большей вероятностью попытаюсь изменить то, что нуждается в изменении"}
+  - {n: 18, text: "Я стал более религиозным"}
+  - {n: 19, text: "Я обнаружил, что я сильнее, чем полагал"}
+  - {n: 20, text: "Я много узнал о том, какими замечательными бывают люди"}
+  - {n: 21, text: "Я стал больше признавать, что нуждаюсь в других людях"}
+
+scales:
+  - id: od
+    name: "Отношение к другим"
+    direct_items: [6, 8, 9, 15, 16, 20, 21]
+    reverse_items: []
+    is_total: false
+
+  - id: nv
+    name: "Новые возможности"
+    direct_items: [3, 7, 11, 14, 17]
+    reverse_items: []
+    is_total: false
+
+  - id: sl
+    name: "Сила личности"
+    direct_items: [4, 10, 12, 19]
+    reverse_items: []
+    is_total: false
+
+  - id: di
+    name: "Духовные изменения"
+    direct_items: [5, 18]
+    reverse_items: []
+    is_total: false
+
+  - id: pc
+    name: "Повышение ценности жизни"
+    direct_items: [1, 2, 13]
+    reverse_items: []
+    is_total: false
+
+  - id: total
+    name: "Индекс ПТР"
+    direct_items: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
+    reverse_items: []
+    is_total: true
+
+norms:
+  - {scale_id: od,    level: low,    label: "Низкий",  min_val: 0,  max_val: 14,  interpretation: "Значительных изменений в социальных связях не произошло"}
+  - {scale_id: od,    level: medium, label: "Средний", min_val: 15, max_val: 24,  interpretation: "Умеренные изменения в отношениях с людьми"}
+  - {scale_id: od,    level: high,   label: "Высокий", min_val: 25, max_val: 35,  interpretation: "Значительно возросло сострадание и близость с окружающими"}
+  - {scale_id: nv,    level: low,    label: "Низкий",  min_val: 0,  max_val: 9,   interpretation: "Новые возможности практически не осознаны"}
+  - {scale_id: nv,    level: medium, label: "Средний", min_val: 10, max_val: 15,  interpretation: "Умеренная готовность к переменам"}
+  - {scale_id: nv,    level: high,   label: "Высокий", min_val: 16, max_val: 25,  interpretation: "Открытость к новым путям развития"}
+  - {scale_id: sl,    level: low,    label: "Низкий",  min_val: 0,  max_val: 7,   interpretation: "Слабое ощущение личного ресурса"}
+  - {scale_id: sl,    level: medium, label: "Средний", min_val: 8,  max_val: 15,  interpretation: "Умеренная уверенность в способности справляться"}
+  - {scale_id: sl,    level: high,   label: "Высокий", min_val: 16, max_val: 20,  interpretation: "Выраженное чувство личной силы"}
+  - {scale_id: di,    level: low,    label: "Низкий",  min_val: 0,  max_val: 3,   interpretation: "Духовная сфера затронута минимально"}
+  - {scale_id: di,    level: medium, label: "Средний", min_val: 4,  max_val: 6,   interpretation: "Умеренный интерес к духовным вопросам"}
+  - {scale_id: di,    level: high,   label: "Высокий", min_val: 7,  max_val: 10,  interpretation: "Выраженный духовный рост"}
+  - {scale_id: pc,    level: low,    label: "Низкий",  min_val: 0,  max_val: 6,   interpretation: "Ценность жизни переосмыслена слабо"}
+  - {scale_id: pc,    level: medium, label: "Средний", min_val: 7,  max_val: 11,  interpretation: "Умеренное переосмысление ценности жизни"}
+  - {scale_id: pc,    level: high,   label: "Высокий", min_val: 12, max_val: 15,  interpretation: "Глубокое понимание ценности каждого дня"}
+  - {scale_id: total, level: low,    label: "Низкий",  min_val: 0,  max_val: 32,  interpretation: "Кризис не стал стимулом для личностного роста"}
+  - {scale_id: total, level: medium, label: "Средний", min_val: 33, max_val: 63,  interpretation: "Избирательный рост в отдельных сферах"}
+  - {scale_id: total, level: high,   label: "Высокий", min_val: 64, max_val: 105, interpretation: "Кризис стал мощным стимулом к позитивной трансформации"}

@@ -1,0 +1,16 @@
+# Секреты — никогда не публиковать
+.streamlit/secrets.toml
+
+# База данных — данные участников не должны быть в репозитории
+survey.db
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Результаты экспорта
+results/
+
+# macOS
+.DS_Store
