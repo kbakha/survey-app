@@ -1,6 +1,6 @@
 instrument:
   id: ptr
-  name: "Опросник посттравматического роста (Tedeschi & Calhoun, адаптация Магомед-Эминова)"
+  name: "1. Опросник посттравматического роста (Tedeschi & Calhoun, адаптация Магомед-Эминова)"
   n_items: 21
   min_score: 0
   max_score: 5

@@ -1,6 +1,6 @@
 instrument:
   id: driver
-  name: "Определение ведущего драйвера (Т. Кэлер, Driver Questionnaire)"
+  name: "3. Определение ведущего драйвера (Т. Кэлер, Driver Questionnaire)"
   n_items: 25
   min_score: 0
   max_score: 2

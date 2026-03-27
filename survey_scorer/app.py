@@ -57,7 +57,7 @@ def page_welcome():
 
     instrument_id = st.selectbox(
         "Методика",
-        options=list(INSTRUMENTS.keys()),
+        options=sorted(INSTRUMENTS.keys(), key=lambda x: INSTRUMENTS[x].name),
         format_func=lambda x: INSTRUMENTS[x].name,
     )
 

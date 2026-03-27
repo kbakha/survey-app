@@ -256,6 +256,68 @@ def charts_usk(df_all: pd.DataFrame):
         st.plotly_chart(fig4, use_container_width=True)
 
 
+def charts_mis(df_all: pd.DataFrame):
+    df = df_all[df_all["instrument_id"] == "mis"].copy()
+    if df.empty:
+        st.info("Нет данных по МИС")
+        return
+
+    MIS_SCALE_ORDER = [
+        "Открытость", "Самоуверенность", "Саморуководство",
+        "Отраженное самоотношение", "Самоценность", "Самопринятие",
+        "Самопривязанность", "Внутренняя конфликтность", "Самообвинение",
+    ]
+
+    # ── Стековая гистограмма: распределение уровней по шкалам ─────────────
+    st.subheader("Распределение уровней по шкалам МИС")
+    level_order = ["Низкий", "Средний", "Высокий"]
+    stacked = df.groupby(["scale_name", "label"]).size().reset_index(name="n")
+    stacked["label"] = pd.Categorical(stacked["label"], categories=level_order, ordered=True)
+    stacked["scale_name"] = pd.Categorical(stacked["scale_name"], categories=MIS_SCALE_ORDER, ordered=True)
+    stacked = stacked.sort_values(["scale_name", "label"])
+    total_per_scale = stacked.groupby("scale_name")["n"].transform("sum")
+    stacked["pct"] = (stacked["n"] / total_per_scale * 100).round(1)
+
+    fig = px.bar(
+        stacked, x="pct", y="scale_name", color="label",
+        orientation="h", barmode="stack",
+        color_discrete_map=LEVEL_COLORS,
+        labels={"pct": "% участников", "scale_name": "Шкала", "label": "Уровень"},
+        text=stacked["pct"].apply(lambda x: f"{x}%" if x >= 8 else ""),
+        category_orders={"label": level_order},
+    )
+    fig.update_layout(xaxis_range=[0, 100], legend_title="Уровень")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── Радарная диаграмма: средние баллы по шкалам ───────────────────────
+    st.subheader("Профиль самоотношения — средние баллы по группе")
+
+    df_ptr = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+        ["respondent_id", "label"]
+    ].rename(columns={"label": "ptr_level"})
+    df_radar = df.merge(df_ptr, on="respondent_id", how="left")
+    df_radar["ptr_level"] = df_radar["ptr_level"].fillna("Все участники")
+
+    groups = df_radar["ptr_level"].unique().tolist()
+    fig2 = go.Figure()
+
+    for group in groups:
+        subset = df_radar[df_radar["ptr_level"] == group]
+        means = subset.groupby("scale_name")["raw_score"].mean().reindex(MIS_SCALE_ORDER).round(2)
+        fig2.add_trace(go.Scatterpolar(
+            r=means.tolist() + [means.iloc[0]],
+            theta=MIS_SCALE_ORDER + [MIS_SCALE_ORDER[0]],
+            fill="toself",
+            name=group,
+        ))
+
+    fig2.update_layout(
+        polar=dict(radialaxis=dict(visible=True)),
+        legend_title="Группа (уровень ПТР)",
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+
 def charts_driver(df_all: pd.DataFrame):
     df = df_all[df_all["instrument_id"] == "driver"].copy()
     if df.empty:
@@ -414,7 +476,7 @@ with tab4:
     # Диаграммы всегда строятся по ВСЕМ данным (фильтры не применяются)
     st.caption("Диаграммы строятся по всем собранным данным, независимо от фильтров.")
 
-    sec1, sec2, sec3, sec4 = st.tabs(["ПТР", "MSTAT-1", "Ведущий драйвер", "УСК"])
+    sec1, sec2, sec3, sec4, sec5 = st.tabs(["ПТР", "MSTAT-1", "Ведущий драйвер", "УСК", "МИС"])
 
     with sec1:
         charts_ptr(df_all)
@@ -424,3 +486,5 @@ with tab4:
         charts_driver(df_all)
     with sec4:
         charts_usk(df_all)
+    with sec5:
+        charts_mis(df_all)
