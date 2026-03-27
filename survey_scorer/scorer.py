@@ -26,14 +26,18 @@ def _find_level(norms, scale_id: str, score: float):
 
 
 def validate(instrument_cfg, answers: dict) -> list:
+    valid_values = (
+        set(instrument_cfg.scale_values)
+        if instrument_cfg.scale_values
+        else set(range(instrument_cfg.min_score, instrument_cfg.max_score + 1))
+    )
     errors = []
     for i in range(1, instrument_cfg.n_items + 1):
         if i not in answers:
             errors.append(f"отсутствует ответ на вопрос {i}")
-        elif not (instrument_cfg.min_score <= answers[i] <= instrument_cfg.max_score):
+        elif answers[i] not in valid_values:
             errors.append(
-                f"Q{i}={answers[i]} вне допустимого диапазона "
-                f"[{instrument_cfg.min_score}, {instrument_cfg.max_score}]"
+                f"Q{i}={answers[i]} вне допустимого диапазона {sorted(valid_values)}"
             )
     return errors
 

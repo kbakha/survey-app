@@ -93,7 +93,7 @@ def page_survey():
     st.divider()
 
     # Build label list: "1 — Совершенно не согласен", etc.
-    scores = list(range(cfg.min_score, cfg.max_score + 1))
+    scores = cfg.scale_values if cfg.scale_values else list(range(cfg.min_score, cfg.max_score + 1))
     if cfg.scale_labels:
         radio_labels = [f"{v} — {l}" for v, l in zip(scores, cfg.scale_labels)]
     else:
@@ -108,7 +108,7 @@ def page_survey():
         selected = st.radio(
             label=f"**{q_num}.** {q_text}",
             options=scores,
-            format_func=lambda v, rl=radio_labels, mn=cfg.min_score: rl[v - mn],
+            format_func=lambda v, rl=radio_labels, sv=scores: rl[sv.index(v)],
             index=None,
             key=f"q_{q_num}",
             horizontal=True,

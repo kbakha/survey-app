@@ -151,6 +151,111 @@ def charts_mstat(df_all: pd.DataFrame):
             st.plotly_chart(fig2, use_container_width=True)
 
 
+def charts_usk(df_all: pd.DataFrame):
+    df = df_all[df_all["instrument_id"] == "usk"].copy()
+    if df.empty:
+        st.info("Нет данных по УСК")
+        return
+
+    USK_SCALE_ORDER = [
+        "Ио — Общая интернальность",
+        "Ид — Достижения",
+        "Ин — Неудачи",
+        "Ис — Семейные отношения",
+        "Ип — Производственные отношения",
+        "Им — Межличностные отношения",
+        "Из — Здоровье и болезнь",
+    ]
+
+    # ── Общая интернальность: распределение уровней ──────────────────────────
+    total = df[df["scale_id"] == "io"].copy()
+    if not total.empty:
+        level_counts = total["label"].value_counts().reset_index()
+        level_counts.columns = ["Уровень", "Количество"]
+        level_counts["Процент"] = (level_counts["Количество"] / level_counts["Количество"].sum() * 100).round(1)
+        level_counts["Метка"] = level_counts.apply(
+            lambda r: f"{r['Количество']} чел. ({r['Процент']}%)", axis=1
+        )
+        order = ["Высокий", "Средний", "Низкий"]
+        level_counts["Уровень"] = pd.Categorical(level_counts["Уровень"], categories=order, ordered=True)
+        level_counts = level_counts.sort_values("Уровень")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Распределение уровней (Общая интернальность Ио)")
+            fig = px.bar(
+                level_counts, x="Уровень", y="Количество", text="Метка",
+                color="Уровень",
+                color_discrete_map=LEVEL_COLORS,
+                labels={"Количество": "Количество участников"},
+            )
+            fig.update_traces(textposition="outside")
+            fig.update_layout(showlegend=False, yaxis_title="Количество участников")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.subheader("Процентное соотношение уровней Ио")
+            fig2 = px.pie(
+                level_counts, names="Уровень", values="Количество",
+                color="Уровень",
+                color_discrete_map=LEVEL_COLORS,
+            )
+            fig2.update_traces(textinfo="percent+label")
+            st.plotly_chart(fig2, use_container_width=True)
+
+    # ── Средние баллы по всем шкалам: радарная диаграмма ────────────────────
+    st.subheader("Профиль УСК — средние баллы по шкалам")
+    subscales = df[df["scale_id"] != "io"].copy()
+    if not subscales.empty:
+        # Попробуем разбить на группы по ПТР
+        df_ptr = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+            ["respondent_id", "label"]
+        ].rename(columns={"label": "ptr_level"})
+        df_radar = subscales.merge(df_ptr, on="respondent_id", how="left")
+        df_radar["ptr_level"] = df_radar["ptr_level"].fillna("Все участники")
+
+        groups = df_radar["ptr_level"].unique().tolist()
+        fig3 = go.Figure()
+        radar_scales = [s for s in USK_SCALE_ORDER if s != "Ио — Общая интернальность"]
+
+        for group in groups:
+            subset = df_radar[df_radar["ptr_level"] == group]
+            means = subset.groupby("scale_name")["raw_score"].mean().reindex(radar_scales).round(2)
+            fig3.add_trace(go.Scatterpolar(
+                r=means.tolist() + [means.iloc[0]],
+                theta=radar_scales + [radar_scales[0]],
+                fill="toself",
+                name=group,
+            ))
+
+        fig3.update_layout(
+            polar=dict(radialaxis=dict(visible=True)),
+            legend_title="Группа (уровень ПТР)",
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    # ── Корреляция Ио × ПТР ──────────────────────────────────────────────────
+    st.subheader("Корреляция УСК (Ио) и ПТР")
+    df_io = df[df["scale_id"] == "io"][["respondent_id", "raw_score"]].rename(columns={"raw_score": "usk_io"})
+    df_ptr2 = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+        ["respondent_id", "raw_score"]
+    ].rename(columns={"raw_score": "ptr_total"})
+    merged = df_io.merge(df_ptr2, on="respondent_id", how="inner")
+
+    if len(merged) < 2:
+        st.info("Нужно минимум 2 участника с обоими тестами")
+    else:
+        fig4 = px.scatter(
+            merged, x="usk_io", y="ptr_total", text="respondent_id",
+            trendline="ols",
+            labels={"usk_io": "УСК Ио (Общая интернальность)", "ptr_total": "ПТР (Индекс)"},
+            color_discrete_sequence=["#5B9BD5"],
+        )
+        fig4.update_traces(textposition="top center")
+        fig4.add_vline(x=0, line_dash="dash", line_color="gray")
+        st.plotly_chart(fig4, use_container_width=True)
+
+
 def charts_driver(df_all: pd.DataFrame):
     df = df_all[df_all["instrument_id"] == "driver"].copy()
     if df.empty:
@@ -309,7 +414,7 @@ with tab4:
     # Диаграммы всегда строятся по ВСЕМ данным (фильтры не применяются)
     st.caption("Диаграммы строятся по всем собранным данным, независимо от фильтров.")
 
-    sec1, sec2, sec3 = st.tabs(["ПТР", "MSTAT-1", "Ведущий драйвер"])
+    sec1, sec2, sec3, sec4 = st.tabs(["ПТР", "MSTAT-1", "Ведущий драйвер", "УСК"])
 
     with sec1:
         charts_ptr(df_all)
@@ -317,3 +422,5 @@ with tab4:
         charts_mstat(df_all)
     with sec3:
         charts_driver(df_all)
+    with sec4:
+        charts_usk(df_all)

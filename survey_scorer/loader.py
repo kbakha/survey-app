@@ -37,6 +37,7 @@ class InstrumentConfig:
     instruction: str = ""
     scale_labels: list = field(default_factory=list)
     items: list = field(default_factory=list)
+    scale_values: list = field(default_factory=list)  # explicit list of valid response values (overrides min_score..max_score range)
 
 
 def load_instruments(config_dir: Path) -> dict:
@@ -62,6 +63,7 @@ def load_instruments(config_dir: Path) -> dict:
             instruction=inst.get("instruction", ""),
             scale_labels=data.get("scale_labels", []),
             items=data.get("items", []),
+            scale_values=inst.get("scale_values", []),
         )
         instruments[cfg.id] = cfg
     print(f"Loaded {len(instruments)} instrument(s): {', '.join(instruments)}")
