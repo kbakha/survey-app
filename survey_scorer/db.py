@@ -3,7 +3,10 @@ from pathlib import Path
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS respondents (
-    respondent_id TEXT PRIMARY KEY
+    respondent_id TEXT PRIMARY KEY,
+    age           INTEGER,
+    child_age     INTEGER,
+    gender        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS results (
@@ -25,8 +28,28 @@ CREATE TABLE IF NOT EXISTS results (
 def init_db(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.executescript(SCHEMA)
+    # Migrate: add columns for existing DBs that lack them
+    for col, typ in [("age", "INTEGER"), ("child_age", "INTEGER"), ("gender", "TEXT")]:
+        try:
+            conn.execute(f"ALTER TABLE respondents ADD COLUMN {col} {typ}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.commit()
     return conn
+
+
+def save_respondent(conn: sqlite3.Connection, respondent_id: str,
+                    age: int = None, child_age: int = None, gender: str = None):
+    conn.execute(
+        """INSERT INTO respondents (respondent_id, age, child_age, gender)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(respondent_id) DO UPDATE SET
+               age = COALESCE(excluded.age, age),
+               child_age = COALESCE(excluded.child_age, child_age),
+               gender = COALESCE(excluded.gender, gender)""",
+        (respondent_id, age, child_age, gender),
+    )
+    conn.commit()
 
 
 def save_results(conn: sqlite3.Connection, score_results: list) -> int:

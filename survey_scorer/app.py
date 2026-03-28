@@ -2,7 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from db import init_db, query_results, save_results
+from db import init_db, query_results, save_respondent, save_results
 from loader import load_instruments
 from scorer import calculate, validate
 
@@ -50,15 +50,45 @@ def init_state():
 # ── Pages ─────────────────────────────────────────────────────────────────────
 def page_welcome():
     st.title("📋 Психологическое исследование")
-    st.write("Введите ваше имя и выберите методику для прохождения.")
+
+    st.markdown(
+        "**Уважаемые родители!**\n\n"
+        "Приглашаем вас принять участие в исследовании, посвящённом изучению пути, "
+        "который проходит каждая семья, воспитывающая ребёнка с особыми потребностями. "
+        "Мы хотим понять, как этот опыт становится источником внутренней силы, "
+        "личностного роста и позитивных перемен.\n"
+        "Ваш путь уникален, и ваш опыт может помочь многим другим."
+    )
+
+    st.write("Введите ваше имя и пройдите все 5 методик.")
     st.divider()
 
-    name = st.text_input("Ваше имя", placeholder="Имя Фамилия")
+    name = st.text_input("Ваше имя", placeholder="Имя")
 
-    instrument_id = st.selectbox(
+    col1, col2 = st.columns(2)
+    with col1:
+        age = st.number_input(
+            "Ваш возраст (полных лет)", min_value=18, max_value=100,
+            value=None, step=1, placeholder="",
+        )
+    with col2:
+        child_age = st.number_input(
+            "Возраст Вашего ребенка с ООП (полных лет)", min_value=0, max_value=30,
+            value=None, step=1, placeholder="",
+        )
+
+    gender = st.radio(
+        "Укажите пол", options=["Мужской", "Женский"],
+        horizontal=True, index=None,
+    )
+
+    st.write("**Методика**")
+    instrument_id = st.radio(
         "Методика",
         options=sorted(INSTRUMENTS.keys(), key=lambda x: INSTRUMENTS[x].name),
         format_func=lambda x: INSTRUMENTS[x].name,
+        label_visibility="collapsed",
+        index=None,
     )
 
     st.divider()
@@ -67,12 +97,28 @@ def page_welcome():
         if not name.strip():
             st.error("Пожалуйста, введите ваше имя.")
             return
+        if age is None:
+            st.error("Пожалуйста, укажите ваш возраст.")
+            return
+        if child_age is None:
+            st.error("Пожалуйста, укажите возраст ребёнка.")
+            return
+        if gender is None:
+            st.error("Пожалуйста, укажите пол.")
+            return
+        if instrument_id is None:
+            st.error("Пожалуйста, выберите методику.")
+            return
         if already_submitted(name.strip(), instrument_id):
             st.warning(
-                f"Вы уже проходили этот тест. "
-                f"Обратитесь к исследователю, если нужно пройти повторно."
+                "Вы уже проходили этот тест. "
+                "Обратитесь к исследователю, если нужно пройти повторно."
             )
             return
+
+        with get_conn() as conn:
+            save_respondent(conn, name.strip(), age, child_age, gender)
+
         st.session_state.respondent_id = name.strip()
         st.session_state.instrument_id = instrument_id
         st.session_state.answers = {}
