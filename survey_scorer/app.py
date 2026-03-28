@@ -55,9 +55,7 @@ def page_welcome():
         "**Уважаемые родители!**\n\n"
         "Приглашаем вас принять участие в исследовании, посвящённом изучению пути, "
         "который проходит каждая семья, воспитывающая ребёнка с особыми потребностями. "
-        "Мы хотим понять, как этот опыт становится источником внутренней силы, "
-        "личностного роста и позитивных перемен.\n"
-        "Ваш путь уникален, и ваш опыт может помочь многим другим."
+                "Ваш путь уникален, и ваш опыт может помочь многим другим."
     )
 
     st.write("Введите ваше имя и пройдите все 5 методик.")
@@ -69,12 +67,12 @@ def page_welcome():
     with col1:
         age = st.number_input(
             "Ваш возраст (полных лет)", min_value=18, max_value=100,
-            value=None, step=1, placeholder="",
+            value=30, step=1,
         )
     with col2:
         child_age = st.number_input(
-            "Возраст Вашего ребенка с ООП (полных лет)", min_value=0, max_value=30,
-            value=None, step=1, placeholder="",
+            "Возраст Вашего ребенка с ООП (полных лет)", min_value=1, max_value=30,
+            value=5, step=1,
         )
 
     gender = st.radio(
@@ -96,12 +94,6 @@ def page_welcome():
     if st.button("Начать тест →", type="primary", use_container_width=True):
         if not name.strip():
             st.error("Пожалуйста, введите ваше имя.")
-            return
-        if age is None:
-            st.error("Пожалуйста, укажите ваш возраст.")
-            return
-        if child_age is None:
-            st.error("Пожалуйста, укажите возраст ребёнка.")
             return
         if gender is None:
             st.error("Пожалуйста, укажите пол.")
