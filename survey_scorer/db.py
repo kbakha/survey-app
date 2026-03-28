@@ -106,3 +106,11 @@ def query_results(
     cursor = conn.execute(query, params)
     columns = [d[0] for d in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def query_respondents(conn: sqlite3.Connection) -> list:
+    cursor = conn.execute(
+        "SELECT respondent_id, age, child_age, gender FROM respondents ORDER BY respondent_id"
+    )
+    columns = [d[0] for d in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]

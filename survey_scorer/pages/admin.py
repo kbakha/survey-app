@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -8,7 +9,7 @@ import streamlit as st
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db import init_db, query_results
+from db import init_db, query_results, query_respondents
 from reporter import export_detail, export_summary, export_group
 
 BASE_DIR = Path(__file__).parent.parent
@@ -400,6 +401,65 @@ with st.sidebar:
 
     respondents = ["Все"] + sorted(df_all["respondent_id"].unique().tolist())
     sel_respondent = st.selectbox("Участник", respondents)
+
+    st.divider()
+
+    # ── Excel export ─────────────────────────────────────────────────────
+    def build_excel(df_all: pd.DataFrame) -> bytes:
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            # Лист 1 — Сводная
+            df_all["column"] = df_all["instrument_id"] + "_" + df_all["scale_id"]
+            pivot = df_all.pivot_table(
+                index="respondent_id", columns="column", values="raw_score", aggfunc="first",
+            ).reset_index()
+            pivot.columns.name = None
+            pivot.to_excel(writer, sheet_name="Сводная", index=False)
+
+            # Лист 2 — Детали
+            detail_cols = ["respondent_id", "instrument_id", "scale_name",
+                           "raw_score", "label", "interpretation", "calculated_at"]
+            df_det = df_all[detail_cols].copy()
+            df_det.columns = ["Участник", "Методика", "Шкала", "Балл",
+                              "Уровень", "Интерпретация", "Дата"]
+            df_det.to_excel(writer, sheet_name="Детали", index=False)
+
+            # Лист 3 — Средние
+            group = (
+                df_all.groupby(["instrument_id", "scale_id", "scale_name"])["raw_score"]
+                .agg(n="count", mean="mean", min="min", max="max", std="std")
+                .round(2).reset_index()
+            )
+            group.columns = ["Методика", "Шкала (id)", "Шкала", "N",
+                             "Среднее", "Min", "Max", "Std"]
+            group.to_excel(writer, sheet_name="Средние", index=False)
+
+            # Лист 4 — Участники (демография)
+            with init_db(DB_PATH) as conn:
+                resp_rows = query_respondents(conn)
+            if resp_rows:
+                df_resp = pd.DataFrame(resp_rows)
+                df_resp.columns = ["Участник", "Возраст", "Возраст ребёнка", "Пол"]
+                df_resp.to_excel(writer, sheet_name="Участники", index=False)
+
+        return buf.getvalue()
+
+    if st.button("📥 Экспорт в Excel", use_container_width=True):
+        all_rows = load_data()
+        if all_rows:
+            xlsx = build_excel(pd.DataFrame(all_rows))
+            st.session_state["excel_data"] = xlsx
+        else:
+            st.warning("Нет данных для экспорта")
+
+    if "excel_data" in st.session_state:
+        st.download_button(
+            "⬇ Скачать .xlsx",
+            data=st.session_state["excel_data"],
+            file_name="results_all.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
 
     st.divider()
     if st.button("Выйти"):
