@@ -114,3 +114,10 @@ def query_respondents(conn: sqlite3.Connection) -> list:
     )
     columns = [d[0] for d in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def delete_respondent(conn: sqlite3.Connection, respondent_id: str) -> int:
+    conn.execute("DELETE FROM results WHERE respondent_id = ?", (respondent_id,))
+    conn.execute("DELETE FROM respondents WHERE respondent_id = ?", (respondent_id,))
+    conn.commit()
+    return conn.total_changes

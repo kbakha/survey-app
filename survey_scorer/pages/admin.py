@@ -10,7 +10,7 @@ import streamlit as st
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db import init_db, query_results, query_respondents
+from db import init_db, query_results, query_respondents, delete_respondent
 from reporter import export_detail, export_summary, export_group
 
 BASE_DIR = Path(__file__).parent.parent
@@ -643,6 +643,29 @@ with st.sidebar:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
+
+    # ── Удаление участника ──────────────────────────────────────────────
+    st.divider()
+    st.subheader("Удалить участника")
+    all_respondents = sorted(df_all["respondent_id"].unique().tolist())
+    del_respondent = st.selectbox("Выберите участника", all_respondents, key="del_resp")
+    if st.button("🗑 Удалить", use_container_width=True):
+        st.session_state["confirm_delete"] = del_respondent
+
+    if "confirm_delete" in st.session_state:
+        name = st.session_state["confirm_delete"]
+        st.warning(f"Удалить **{name}** и все результаты?")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Да, удалить", type="primary", use_container_width=True):
+                with init_db(DB_PATH) as conn:
+                    delete_respondent(conn, name)
+                del st.session_state["confirm_delete"]
+                st.rerun()
+        with c2:
+            if st.button("Отмена", use_container_width=True):
+                del st.session_state["confirm_delete"]
+                st.rerun()
 
     st.divider()
     if st.button("Выйти"):
