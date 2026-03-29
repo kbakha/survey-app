@@ -2,7 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from db import init_db, query_results, save_respondent, save_results
+from db import init_db, query_respondents, query_results, save_respondent, save_results
 from loader import load_instruments
 from scorer import calculate, validate
 
@@ -35,6 +35,21 @@ def already_submitted(respondent_id: str, instrument_id: str) -> bool:
     return len(rows) > 0
 
 
+def get_respondent_info(respondent_id: str) -> dict | None:
+    with get_conn() as conn:
+        rows = query_respondents(conn)
+    for r in rows:
+        if r["respondent_id"] == respondent_id:
+            return r
+    return None
+
+
+def get_submitted_instruments(respondent_id: str) -> set:
+    with get_conn() as conn:
+        rows = query_results(conn, respondent_id=respondent_id)
+    return {r["instrument_id"] for r in rows}
+
+
 def init_state():
     defaults = {
         "page": "welcome",
@@ -55,39 +70,68 @@ def page_welcome():
         "**Уважаемые родители!**\n\n"
         "Приглашаем вас принять участие в исследовании, посвящённом изучению пути, "
         "который проходит каждая семья, воспитывающая ребёнка с особыми потребностями. "
-                "Ваш путь уникален, и ваш опыт может помочь многим другим."
+        "Ваш путь уникален, и ваш опыт может помочь многим другим."
     )
 
     st.write("Введите ваше имя и пройдите все 5 методик.")
     st.divider()
 
-    name = st.text_input("Ваше имя", placeholder="Имя")
+    # ── Имя (всегда видно) ───────────────────────────────────────────────
+    name = st.text_input("Ваше имя", placeholder="Имя",
+                         value=st.session_state.get("respondent_id", ""))
 
-    col1, col2 = st.columns(2)
-    with col1:
-        age = st.number_input(
-            "Ваш возраст (полных лет)", min_value=18, max_value=100,
-            value=30, step=1,
+    # Проверяем, зарегистрирован ли уже этот респондент
+    registered = False
+    if name.strip():
+        info = get_respondent_info(name.strip())
+        if info and info.get("age") and info.get("gender"):
+            registered = True
+
+    if not registered:
+        # ── Первый раз: заполни демографию ───────────────────────────────
+        col1, col2 = st.columns(2)
+        with col1:
+            age = st.number_input(
+                "Ваш возраст (полных лет)", min_value=18, max_value=100,
+                value=25, step=1,
+            )
+        with col2:
+            child_age = st.number_input(
+                "Возраст Вашего ребенка с ООП (полных лет)", min_value=1, max_value=30,
+                value=1, step=1,
+            )
+
+        gender = st.radio(
+            "Укажите пол", options=["Мужской", "Женский"],
+            horizontal=True, index=None,
         )
-    with col2:
-        child_age = st.number_input(
-            "Возраст Вашего ребенка с ООП (полных лет)", min_value=1, max_value=30,
-            value=5, step=1,
+    else:
+        st.info(
+            f"С возвращением, **{name.strip()}**! "
+            f"(возраст: {info['age']}, ребёнок: {info['child_age']}, пол: {info['gender']})"
         )
 
-    gender = st.radio(
-        "Укажите пол", options=["Мужской", "Женский"],
-        horizontal=True, index=None,
-    )
+    # ── Методика ─────────────────────────────────────────────────────────
+    sorted_ids = sorted(INSTRUMENTS.keys(), key=lambda x: INSTRUMENTS[x].name)
+    submitted = get_submitted_instruments(name.strip()) if name.strip() else set()
 
     st.write("**Методика**")
     instrument_id = st.radio(
         "Методика",
-        options=sorted(INSTRUMENTS.keys(), key=lambda x: INSTRUMENTS[x].name),
-        format_func=lambda x: INSTRUMENTS[x].name,
+        options=sorted_ids,
+        format_func=lambda x: (
+            INSTRUMENTS[x].name + (" ✅" if x in submitted else "")
+        ),
         label_visibility="collapsed",
         index=None,
     )
+
+    if submitted:
+        remaining = len(INSTRUMENTS) - len(submitted)
+        if remaining > 0:
+            st.caption(f"Пройдено {len(submitted)} из {len(INSTRUMENTS)} методик")
+        else:
+            st.success("Все 5 методик пройдены!")
 
     st.divider()
 
@@ -95,21 +139,21 @@ def page_welcome():
         if not name.strip():
             st.error("Пожалуйста, введите ваше имя.")
             return
-        if gender is None:
-            st.error("Пожалуйста, укажите пол.")
-            return
+        if not registered:
+            if gender is None:
+                st.error("Пожалуйста, укажите пол.")
+                return
+            with get_conn() as conn:
+                save_respondent(conn, name.strip(), age, child_age, gender)
         if instrument_id is None:
             st.error("Пожалуйста, выберите методику.")
             return
-        if already_submitted(name.strip(), instrument_id):
+        if instrument_id in submitted:
             st.warning(
                 "Вы уже проходили этот тест. "
                 "Обратитесь к исследователю, если нужно пройти повторно."
             )
             return
-
-        with get_conn() as conn:
-            save_respondent(conn, name.strip(), age, child_age, gender)
 
         st.session_state.respondent_id = name.strip()
         st.session_state.instrument_id = instrument_id
@@ -202,7 +246,7 @@ def page_done():
 
     if st.button("Пройти другой тест", use_container_width=True):
         st.session_state.page = "welcome"
-        st.session_state.respondent_id = ""
+        # respondent_id сохраняем — чтобы не вводить данные повторно
         st.session_state.instrument_id = None
         st.rerun()
 
