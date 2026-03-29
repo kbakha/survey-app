@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -90,6 +91,42 @@ def charts_ptr(df_all: pd.DataFrame):
             fig2.update_traces(textinfo="percent+label")
             st.plotly_chart(fig2, use_container_width=True)
 
+    # ── Гистограмма с кривой Гаусса ───────────────────────────────────────
+    if not total.empty and len(total) >= 3:
+        st.subheader("Распределение баллов ПТР (гистограмма + кривая нормального распределения)")
+        scores = total["raw_score"].values
+        mu, sigma = scores.mean(), scores.std()
+
+        fig_hist = go.Figure()
+        fig_hist.add_trace(go.Histogram(
+            x=scores, nbinsx=12, histnorm="probability density",
+            name="Распределение", marker_color="#5B9BD5", opacity=0.7,
+        ))
+        if sigma > 0:
+            x_range = np.linspace(max(0, mu - 3 * sigma), mu + 3 * sigma, 100)
+            y_gauss = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x_range - mu) / sigma) ** 2)
+            fig_hist.add_trace(go.Scatter(
+                x=x_range, y=y_gauss, mode="lines",
+                name=f"Норм. распр. (μ={mu:.1f}, σ={sigma:.1f})",
+                line=dict(color="#F44336", width=2),
+            ))
+        fig_hist.update_layout(
+            xaxis_title="Балл ПТР", yaxis_title="Плотность",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+    # ── Box-plot ───────────────────────────────────────────────────────────
+    if not total.empty:
+        st.subheader("Ящик с усами (Box-plot) — баллы ПТР")
+        fig_box = px.box(
+            total, y="raw_score", points="all",
+            labels={"raw_score": "Балл ПТР"},
+            color_discrete_sequence=["#5B9BD5"],
+        )
+        fig_box.update_layout(showlegend=False)
+        st.plotly_chart(fig_box, use_container_width=True)
+
     # ── Средние баллы по подшкалам ────────────────────────────────────────────
     st.subheader("Средние баллы по подшкалам ПТР")
     subscales = df[df["scale_id"] != "total"]
@@ -141,11 +178,14 @@ def charts_mstat(df_all: pd.DataFrame):
         if len(merged) < 2:
             st.info("Нужно минимум 2 участника с обоими тестами")
         else:
+            merged["Уровень"] = merged["mstat_T"].apply(
+                lambda t: "Толерантность" if t > 0 else ("Интолерантность" if t < 0 else "Нейтральный")
+            )
             fig2 = px.scatter(
                 merged, x="mstat_T", y="ptr_total", text="respondent_id",
-                trendline="ols",
+                color="Уровень", color_discrete_map=LEVEL_COLORS,
+                trendline="ols", trendline_scope="overall",
                 labels={"mstat_T": "MSTAT-1 (Толерантность)", "ptr_total": "ПТР (Индекс)"},
-                color_discrete_sequence=["#5B9BD5"],
             )
             fig2.update_traces(textposition="top center")
             fig2.add_vline(x=0, line_dash="dash", line_color="gray")
@@ -256,6 +296,29 @@ def charts_usk(df_all: pd.DataFrame):
         fig4.add_vline(x=0, line_dash="dash", line_color="gray")
         st.plotly_chart(fig4, use_container_width=True)
 
+    # ── Столбчатая: средний ПТР по группам интернальности ─────────────────
+    st.subheader("Средний балл ПТР по уровню интернальности (Ио)")
+    if not total.empty:
+        io_with_ptr = total[["respondent_id", "label"]].rename(columns={"label": "Ио_уровень"}).merge(
+            df_ptr2, on="respondent_id", how="inner"
+        )
+        if not io_with_ptr.empty:
+            group_means = io_with_ptr.groupby("Ио_уровень")["ptr_total"].mean().round(2).reset_index()
+            group_means.columns = ["Группа", "Средний ПТР"]
+            order = ["Низкий", "Средний", "Высокий"]
+            group_means["Группа"] = pd.Categorical(group_means["Группа"], categories=order, ordered=True)
+            group_means = group_means.sort_values("Группа")
+            fig5 = px.bar(
+                group_means, x="Группа", y="Средний ПТР", text="Средний ПТР",
+                color="Группа", color_discrete_map=LEVEL_COLORS,
+                labels={"Средний ПТР": "Средний балл ПТР"},
+            )
+            fig5.update_traces(textposition="outside")
+            fig5.update_layout(showlegend=False)
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("Нужны данные по обоим тестам (УСК и ПТР)")
+
 
 def charts_mis(df_all: pd.DataFrame):
     df = df_all[df_all["instrument_id"] == "mis"].copy()
@@ -318,6 +381,29 @@ def charts_mis(df_all: pd.DataFrame):
     )
     st.plotly_chart(fig2, use_container_width=True)
 
+    # ── Корреляционная тепловая карта: ПТР × шкалы МИС ───────────────────
+    st.subheader("Корреляция шкал МИС с ПТР (тепловая карта)")
+    df_ptr = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+        ["respondent_id", "raw_score"]
+    ].rename(columns={"raw_score": "ПТР"})
+
+    mis_wide = df.pivot_table(
+        index="respondent_id", columns="scale_name", values="raw_score", aggfunc="first",
+    ).reset_index()
+    mis_corr = mis_wide.merge(df_ptr, on="respondent_id", how="inner")
+
+    if len(mis_corr) >= 3:
+        cols_for_corr = MIS_SCALE_ORDER + ["ПТР"]
+        corr = mis_corr[cols_for_corr].corr().round(2)
+        fig_hm = px.imshow(
+            corr, text_auto=True, color_continuous_scale="RdBu_r",
+            zmin=-1, zmax=1, aspect="auto",
+        )
+        fig_hm.update_layout(xaxis_title="", yaxis_title="")
+        st.plotly_chart(fig_hm, use_container_width=True)
+    else:
+        st.info("Нужно минимум 3 участника с обоими тестами (МИС и ПТР)")
+
 
 def charts_driver(df_all: pd.DataFrame):
     df = df_all[df_all["instrument_id"] == "driver"].copy()
@@ -379,6 +465,103 @@ def charts_driver(df_all: pd.DataFrame):
         legend_title="Группа (уровень ПТР)",
     )
     st.plotly_chart(fig2, use_container_width=True)
+
+    # ── Групповой Box-plot: ведущий драйвер × ПТР ────────────────────────
+    st.subheader("Уровень ПТР по типу ведущего драйвера")
+    df_ptr_score = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+        ["respondent_id", "raw_score"]
+    ].rename(columns={"raw_score": "ptr_total"})
+
+    # Определяем ведущий драйвер для каждого участника (максимальный балл)
+    driver_wide = df.pivot_table(
+        index="respondent_id", columns="scale_name", values="raw_score", aggfunc="first",
+    )
+    if not driver_wide.empty:
+        leading = driver_wide.idxmax(axis=1).reset_index()
+        leading.columns = ["respondent_id", "Ведущий драйвер"]
+        leading_with_ptr = leading.merge(df_ptr_score, on="respondent_id", how="inner")
+
+        if len(leading_with_ptr) >= 2:
+            fig_box = px.box(
+                leading_with_ptr, x="Ведущий драйвер", y="ptr_total",
+                points="all", color="Ведущий драйвер",
+                labels={"ptr_total": "Балл ПТР", "Ведущий драйвер": "Ведущий драйвер"},
+                category_orders={"Ведущий драйвер": DRIVER_ORDER},
+            )
+            fig_box.update_layout(showlegend=False)
+            st.plotly_chart(fig_box, use_container_width=True)
+        else:
+            st.info("Нужно минимум 2 участника с обоими тестами")
+
+    # ── Pie: распространённость драйверов в группах ПТР ──────────────────
+    st.subheader("Ведущий драйвер в группах по уровню ПТР")
+    if not driver_wide.empty:
+        df_ptr_level = df_all[(df_all["instrument_id"] == "ptr") & (df_all["scale_id"] == "total")][
+            ["respondent_id", "label"]
+        ].rename(columns={"label": "ptr_level"})
+        leading_with_level = leading.merge(df_ptr_level, on="respondent_id", how="inner")
+
+        ptr_groups = [g for g in ["Высокий", "Низкий"] if g in leading_with_level["ptr_level"].values]
+        if ptr_groups:
+            cols = st.columns(len(ptr_groups))
+            for i, level in enumerate(ptr_groups):
+                subset = leading_with_level[leading_with_level["ptr_level"] == level]
+                with cols[i]:
+                    st.write(f"**ПТР: {level}** ({len(subset)} чел.)")
+                    fig_pie = px.pie(
+                        subset, names="Ведущий драйвер",
+                        category_orders={"Ведущий драйвер": DRIVER_ORDER},
+                    )
+                    fig_pie.update_traces(textinfo="percent+label")
+                    st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Нужны участники с разными уровнями ПТР")
+
+
+def charts_general(df_all: pd.DataFrame):
+    """Общая матрица корреляций: ПТР, Ио, MSTAT, Самоценность, Саморуководство, Самообвинение."""
+    key_scales = {
+        "ПТР (общий)": ("ptr", "total"),
+        "Ио (интернальность)": ("usk", "io"),
+        "MSTAT-1 (толерантность)": ("mstat1", "T"),
+        "Самоценность (МИС)": ("mis", "scen"),
+        "Саморуководство (МИС)": ("mis", "sruk"),
+        "Самообвинение (МИС)": ("mis", "sobv"),
+    }
+
+    frames = []
+    for label, (instr_id, scale_id) in key_scales.items():
+        sub = df_all[(df_all["instrument_id"] == instr_id) & (df_all["scale_id"] == scale_id)][
+            ["respondent_id", "raw_score"]
+        ].rename(columns={"raw_score": label})
+        frames.append(sub)
+
+    if not frames:
+        st.info("Недостаточно данных")
+        return
+
+    merged = frames[0]
+    for f in frames[1:]:
+        merged = merged.merge(f, on="respondent_id", how="inner")
+
+    if len(merged) < 3:
+        st.info("Нужно минимум 3 участника, прошедших все 5 методик")
+        return
+
+    st.subheader("Матрица корреляций (ключевые шкалы)")
+    st.caption(
+        "Положительные корреляции (синие) подтверждают связь ПТР с интернальностью, "
+        "толерантностью и самоценностью. Отрицательные (красные) — связь с самообвинением."
+    )
+
+    corr_cols = list(key_scales.keys())
+    corr = merged[corr_cols].corr().round(2)
+    fig = px.imshow(
+        corr, text_auto=True, color_continuous_scale="RdBu_r",
+        zmin=-1, zmax=1, aspect="auto",
+    )
+    fig.update_layout(xaxis_title="", yaxis_title="", height=500)
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -536,7 +719,9 @@ with tab4:
     # Диаграммы всегда строятся по ВСЕМ данным (фильтры не применяются)
     st.caption("Диаграммы строятся по всем собранным данным, независимо от фильтров.")
 
-    sec1, sec2, sec3, sec4, sec5 = st.tabs(["ПТР", "MSTAT-1", "Ведущий драйвер", "УСК", "МИС"])
+    sec1, sec2, sec3, sec4, sec5, sec6 = st.tabs([
+        "ПТР", "MSTAT-1", "Ведущий драйвер", "УСК", "МИС", "🔗 Общая"
+    ])
 
     with sec1:
         charts_ptr(df_all)
@@ -548,3 +733,5 @@ with tab4:
         charts_usk(df_all)
     with sec5:
         charts_mis(df_all)
+    with sec6:
+        charts_general(df_all)
