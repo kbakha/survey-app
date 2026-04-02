@@ -10,7 +10,7 @@ from scorer import calculate, validate
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "survey.db"
 SEED_PATH = BASE_DIR / "data" / "seed.xlsx"
-SURVEY_CLOSED = True  # False = опрос открыт, True = только просмотр результатов
+SURVEY_CLOSED = st.secrets.get("SURVEY_CLOSED", True)  # управляется через secrets
 
 st.set_page_config(
     page_title="Психологическое исследование",
