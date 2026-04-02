@@ -261,12 +261,26 @@ def page_done():
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
-if SURVEY_CLOSED:
+def _unlock_survey():
+    """Show admin login to unlock survey when SURVEY_CLOSED."""
     st.title("📋 Исследование завершено")
     st.info(
         "Сбор данных завершён. Спасибо всем участникам!\n\n"
         "Результаты доступны на странице **Результаты** (в боковом меню)."
     )
+    st.divider()
+    with st.expander("🔑 Вход для исследователя"):
+        pwd = st.text_input("Пароль", type="password", key="survey_unlock_pwd")
+        if st.button("Войти", key="survey_unlock_btn"):
+            if pwd == st.secrets.get("ADMIN_PASSWORD", "admin123"):
+                st.session_state.survey_unlocked = True
+                st.rerun()
+            else:
+                st.error("Неверный пароль")
+
+
+if SURVEY_CLOSED and not st.session_state.get("survey_unlocked", False):
+    _unlock_survey()
 else:
     init_state()
 
