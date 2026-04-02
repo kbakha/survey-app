@@ -2,13 +2,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from db import init_db, query_respondents, query_results, save_respondent, save_results
+from db import init_db, is_db_empty, seed_from_xlsx, query_respondents, query_results, save_respondent, save_results
 from loader import load_instruments
 from scorer import calculate, validate
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "survey.db"
+SEED_PATH = BASE_DIR / "data" / "seed.xlsx"
+SURVEY_CLOSED = True  # False = опрос открыт, True = только просмотр результатов
 
 st.set_page_config(
     page_title="Психологическое исследование",
@@ -26,6 +28,13 @@ INSTRUMENTS = get_instruments()
 
 def get_conn():
     return init_db(DB_PATH)
+
+
+# ── Seed DB on first run ─────────────────────────────────────────────────────
+if SEED_PATH.exists():
+    with get_conn() as conn:
+        if is_db_empty(conn):
+            seed_from_xlsx(conn, SEED_PATH)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -252,12 +261,19 @@ def page_done():
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
-init_state()
+if SURVEY_CLOSED:
+    st.title("📋 Исследование завершено")
+    st.info(
+        "Сбор данных завершён. Спасибо всем участникам!\n\n"
+        "Результаты доступны на странице **Результаты** (в боковом меню)."
+    )
+else:
+    init_state()
 
-match st.session_state.page:
-    case "welcome":
-        page_welcome()
-    case "survey":
-        page_survey()
-    case "done":
-        page_done()
+    match st.session_state.page:
+        case "welcome":
+            page_welcome()
+        case "survey":
+            page_survey()
+        case "done":
+            page_done()

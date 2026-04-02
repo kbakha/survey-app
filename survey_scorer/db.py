@@ -1,6 +1,8 @@
 import sqlite3
 from pathlib import Path
 
+import pandas as pd
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS respondents (
     respondent_id TEXT PRIMARY KEY,
@@ -121,3 +123,56 @@ def delete_respondent(conn: sqlite3.Connection, respondent_id: str) -> int:
     conn.execute("DELETE FROM respondents WHERE respondent_id = ?", (respondent_id,))
     conn.commit()
     return conn.total_changes
+
+
+def is_db_empty(conn: sqlite3.Connection) -> bool:
+    row = conn.execute("SELECT COUNT(*) FROM results").fetchone()
+    return row[0] == 0
+
+
+def seed_from_xlsx(conn: sqlite3.Connection, xlsx_path: Path) -> int:
+    """Populate empty DB from exported xlsx (sheets: Детали, Участники, Средние)."""
+    xls = pd.ExcelFile(xlsx_path)
+
+    # ── Участники → respondents ──────────────────────────────────────────
+    if "Участники" in xls.sheet_names:
+        df_resp = pd.read_excel(xls, "Участники")
+        for _, r in df_resp.iterrows():
+            conn.execute(
+                """INSERT OR IGNORE INTO respondents
+                   (respondent_id, age, child_age, gender) VALUES (?, ?, ?, ?)""",
+                (r["Участник"], int(r["Возраст"]) if pd.notna(r["Возраст"]) else None,
+                 int(r["Возраст ребёнка"]) if pd.notna(r["Возраст ребёнка"]) else None,
+                 r["Пол"] if pd.notna(r["Пол"]) else None),
+            )
+
+    # ── Средние → build scale_id mapping ─────────────────────────────────
+    scale_id_map = {}  # (instrument_id, scale_name) → scale_id
+    if "Средние" in xls.sheet_names:
+        df_avg = pd.read_excel(xls, "Средние")
+        for _, r in df_avg.iterrows():
+            scale_id_map[(r["Методика"], r["Шкала"])] = r["Шкала (id)"]
+
+    # ── Детали → results ─────────────────────────────────────────────────
+    saved = 0
+    if "Детали" in xls.sheet_names:
+        df_det = pd.read_excel(xls, "Детали")
+        for _, r in df_det.iterrows():
+            instrument_id = r["Методика"]
+            scale_name = r["Шкала"]
+            scale_id = scale_id_map.get((instrument_id, scale_name), scale_name)
+            label = r["Уровень"] if pd.notna(r["Уровень"]) else ""
+            conn.execute(
+                """INSERT OR REPLACE INTO results
+                   (respondent_id, instrument_id, scale_id, scale_name,
+                    raw_score, level, label, interpretation, calculated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (r["Участник"], instrument_id, scale_id, scale_name,
+                 r["Балл"], label, label,
+                 r["Интерпретация"] if pd.notna(r["Интерпретация"]) else "",
+                 r["Дата"] if pd.notna(r["Дата"]) else ""),
+            )
+            saved += 1
+
+    conn.commit()
+    return saved
